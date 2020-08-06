@@ -16,12 +16,14 @@ from base64 import b64encode
 import os
 from random import randint, seed
 
+import bcrypt
 import click
 from sqlalchemy import asc
 
 from lego import app, db
 from lego.models import User, Team
 from lego.routes import set_active_teams
+from tabulate import tabulate
 
 # seed random number generation
 seed()
@@ -30,22 +32,20 @@ seed()
 @app.cli.command('init', short_help='Initialise the application.',
     help='Initialise the application by creating the database and the default '
          'users - Admin and Judge.')
-def init_app():
+@click.option('--admin-password', default='admin')
+@click.option('--judge-password', default='judge')
+def init_app(admin_password, judge_password):
     click.echo('Initialising application...')
     db.create_all()
     click.echo('Database created.')
 
     admin = 'Admin'
-    admin_pword = 'admin'
-    # admin_pword = _request_password(admin, default='admin')
 
     judge = 'Judge'
-    judge_pword = 'judge'
-    # judge_pword = _request_password(judge, default='judge')
 
-    admin_user = User(username=admin, password=admin_pword, is_admin=True)
+    admin_user = User(username=admin, password=bcrypt.hashpw(admin_password.encode('utf-8'), bcrypt.gensalt()), is_admin=True)
     db.session.add(admin_user)
-    judge_user = User(username=judge, password=judge_pword, is_judge=True)
+    judge_user = User(username=judge, password=bcrypt.hashpw(judge_password.encode('utf-8'), bcrypt.gensalt()), is_judge=True)
     db.session.add(judge_user)
 
     practice_team = Team(number=-1, name='Practice', is_practice=True)
@@ -56,25 +56,6 @@ def init_app():
     click.echo('Practice team created.')
 
     _set_stage()
-
-
-def _request_password(user: str, default: str):
-    '''
-    Helper for requesting a password to be input.
-    '''
-    pword = click.prompt('Enter password for {!s}'.format(user), hide_input=True, default=default)
-
-    # allow them to use the default
-    if pword == default:
-        return default
-
-    pword2 = click.prompt('Confirm password for {!s}'.format(user), hide_input=True)
-
-    if pword != pword2:
-        click.echo('Passwords do not match.')
-        raise click.Abort()
-
-    return pword
 
 
 @app.cli.command('secret',
@@ -283,4 +264,51 @@ def simulate():
     db.session.commit()
 
     click.echo('Complete!')
+
+
+@app.cli.group()
+def user():
+    pass
+
+@user.command('new')
+@click.argument('username')
+@click.option('-p','--password', prompt=True, hide_input=True, help='Password for username')
+@click.option('--admin',is_flag=True, help='Mark user as an admin')
+@click.option('--judge',is_flag=True, help = 'Mark user as a judge')
+def create_user(username,password,judge, admin):
+    user = User(username=username, password=bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()),is_judge= judge,is_admin= admin)
+    db.session.add(user)
+    db.session.commit()
+
+
+@user.command('login')
+@click.argument('username')
+@click.option('-p','--password', prompt=True, hide_input=True, help='Password for username')
+def user_login(username,password):
+    login=User.authenticate(username, password)
+
+    if isinstance(login, User):
+        print('Success')
+    else:
+        print(login)
+
+
+@user.command('ls')
+def user_ls():
+    users = User.query.all()
+    table = []
+
+    for user in users:
+        table.append([user.id, user.username,user.password,user.is_judge,user.is_admin])
+
+    print(tabulate(table, headers = ["id","username","password","is_judge","is_admin"], tablefmt="orgtbl"))
+
+
+@user.command('rm')
+@click.argument('username')
+def rm(username):
+    user = User.query.filter_by(username=username).first()
+    db.session.delete(user)
+    db.session.commit()
+
 

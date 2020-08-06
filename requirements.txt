@@ -1,3 +1,5 @@
+setuptools <=46
+bcrypt==3.1.7
 Flask==0.12.2
 Flask-Login==0.4.0
 Flask-SQLAlchemy==2.3.2
@@ -7,5 +9,6 @@ MarkupSafe==1.0
 SQLAlchemy==1.1.14
 WTForms==2.1
 Werkzeug==0.12.2
-click==6.7
+click==7.1.2
 itsdangerous==0.24
+tabulate==0.8.7

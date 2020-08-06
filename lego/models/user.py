@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # The model for a user in the database.
 # -----------------------------------------------------------------------------
-
+import bcrypt
 from lego import db
 
 
@@ -26,10 +26,11 @@ class User(db.Model):
         if user is None:
             return error_msg
 
-        if user.password != password:
-            return error_msg
+        if bcrypt.checkpw(password.encode('utf-8'), user.password):
+            return user
 
-        return user
+        else:
+            return error_msg
 
     @property
     def is_authenticated(self):
