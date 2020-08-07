@@ -107,20 +107,6 @@ def _add_teams(file: str):
             click.echo('Team successfully added.')
 
 
-@app.cli.command('reset-teams',
-    short_help='Remove all teams from the database.')
-@click.option('-y', is_flag=True, help='Skip confirmation.')
-def reset_teams(y: bool):
-    no_confirm = y
-
-    if not no_confirm:
-        click.echo('All teams will be deleted from the database.')
-        click.confirm('Do you wish to continue?', abort=True)
-
-    Team.query.filter_by(is_practice=False).delete()
-    db.session.commit()
-    click.echo('Teams deleted.')
-
 
 @app.cli.command('list-teams',
     short_help='List all teams from the database.')
@@ -144,52 +130,83 @@ def list_teams(no_practice: bool, active: bool):
         click.echo('  {:<6}   {!s}'.format(t.number, t.name))
 
 
-@app.cli.command('stage', short_help='Set the current stage.',
-    help='Set the current stage. this is for advanced usage only and may cause issues if used '
-         'during a live event. See the manual for when this should be used.')
-def set_stage():
-    _set_stage()
+#@app.cli.command('stage', short_help='Set the current stage.',
+#    help='Set the current stage. this is for advanced usage only and may cause issues if used '
+#         'during a live event. See the manual for when this should be used.')
+#def set_stage():
+#    _set_stage()
 
 
-def _set_stage(stage: int=None, no_confirm: bool=False):
-    '''
-    Helper for setting the stage.
-    '''
+@app.cli.group("stage")
+def stage():
+    pass
 
+@stage.command("reset")
+def reset_stage():
+    stage_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', '.stage')
     stage = 0
-    return
-    # stage_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', '.stage')
+    stages = ('round_1', 'round_2', 'quarter_final', 'semi_final', 'final')
+    stage_txt = stages[stage]
 
-    # while True:
-    #     if stage is None:
-    #         stage = click.prompt('Enter stage (0-4)', default='0')
 
-    #     try:
-    #         stage = int(stage)
-    #     except ValueError:
-    #         click.echo('Invalid value for stage: {!s}'.format(stage))
-    #         continue
+    click.echo('You have chosen {!s} ({!s}).'.format(stage_txt, stage))
 
-    #     stages = ('round_1', 'round_2', 'quarter_final', 'semi_final', 'final')
-    #     stage_txt = stages[stage]
+    try:
+        with open(stage_file_path, 'w') as fh:
+            fh.write(str(stage))
+    except IOError as e:
+        click.echo('Could not save stage to file. ({!s})'.format(e))
+        raise click.Abort()
 
-    #     if app.config['LEGO_APP_TYPE'] == 'bristol' and stage == 1:
-    #         click.echo('Round 2 is only available during UK final.\n'
-    #                    'If this is not an error, please change your config.py and try again.')
-    #         raise click.Abort()
+    click.echo('Successfully reset stage.')
 
-    #     click.echo('You have chosen {!s} ({!s}).'.format(stage_txt, stage))
 
-    #     if no_confirm or click.confirm('Is this correct?'):
-    #         try:
-    #             with open(stage_file_path, 'w') as fh:
-    #                 fh.write(str(stage))
-    #         except IOError as e:
-    #             click.echo('Could not save stage to file. ({!s})'.format(e))
-    #             raise click.Abort()
+@stage.command("set")
+@click.argument("stage", type=click.IntRange(0, 4))
+def set_stage(stage: int=None):
+    stage_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', '.stage')
 
-    #         click.echo('Successfully set stage.')
-    #         return
+    stages = ('round_1', 'round_2', 'quarter_final', 'semi_final', 'final')
+    stage_txt = stages[stage]
+
+    if app.config['LEGO_APP_TYPE'] == 'bristol' and stage == 1:
+        click.echo('Round 2 is only available during UK final.\n'
+                   'If this is not an error, please change your config.py and try again.')
+        raise click.Abort()
+
+    click.echo('You have chosen {!s} ({!s}).'.format(stage_txt, stage))
+
+    try:
+        with open(stage_file_path, 'w') as fh:
+            fh.write(str(stage))
+    except IOError as e:
+        click.echo('Could not save stage to file. ({!s})'.format(e))
+        raise click.Abort()
+
+    click.echo('Successfully set stage.')
+
+# flask stage get
+# > 0-4
+
+@stage.command("get", short_help='Get user stage')
+def get_stage():
+    stage_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tmp', '.stage')
+
+    with open(stage_file_path) as fh:
+        content = fh.read()
+
+    stage = int(content.strip())
+
+    stages = ('round_1', 'round_2', 'quarter_final', 'semi_final', 'final')
+    stage_txt = stages[stage]
+
+    print(stage, stage_txt)
+
+    #return bcrypt.hashpw(stage_txt.encode('utf-8')
+
+
+
+
 
 
 @app.cli.command('simulate', short_help='Simulate a run through the comptition.',
@@ -311,4 +328,21 @@ def rm(username):
     db.session.delete(user)
     db.session.commit()
 
+@user.command('password',
+    short_help='Reset users password')
+@click.argument('username')
+@click.option('-p','--password', prompt=True, hide_input=True, help='New password for username')
+def reset_password(username,password):
+    db.session.update(user(password))
+    db.session.commit()
 
+@app.cli.group()
+def team():
+    pass
+
+@team.command('rm')
+@click.argument('name')
+def rm_team(name):
+    team = Team.query.filter_by(name=name).first()
+    db.session.delete(team)
+    db.session.commit()
